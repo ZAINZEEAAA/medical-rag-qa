@@ -25,48 +25,53 @@ outdated or hallucinated) knowledge.
 
 ## 📝 Project History & Learning Notes
 
-Yeh project develop karte waqt do versions se guzra hai — dono is repo mein
-**sirf learning/reference purpose** ke liye rakhe gaye hain, taake koi bhi
-seekhne wala dekh sake ke ek RAG pipeline mein kya masla aa sakta hai aur
-usko kaise fix kiya jata hai.
+This project went through two development iterations. Both are documented here
+for **learning and reference purposes**, so that others can see what kind of
+issue can arise in a RAG pipeline and how it was diagnosed and fixed.
 
-### ❌ v1 — Initial Version (Issue wali)
-Is version mein RAG pipeline (`retrieve()`, `generate_text()`, `rag_answer()`)
-aur Flask frontend alag alag Colab sessions mein test kiye gaye the. Jab bhi
-Colab runtime restart/disconnect hota, saari functions aur variables
-(`documents`, `index`, `embed_model`, etc.) memory se udd jate the — lekin
-Flask app phir bhi unhi functions ko call karne ki koshish karta raha, jiski
-wajah se:
+### ❌ v1 — Initial Version (Issue Present)
 
-- Frontend par "Something went wrong" ka generic error aata tha
-- Backend mein `NameError: name 'rag_answer' is not defined` jaisi errors aati thi
-- Model sahi trained hone ke bawajood answers generate nahi ho rahe the,
-  kyunke function hi call nahi ho pa raha tha
+In this version, the RAG pipeline components (`retrieve()`, `generate_text()`,
+`rag_answer()`) and the Flask frontend were tested across separate, inconsistent
+Colab sessions. Whenever the Colab runtime restarted or disconnected, all
+in-memory functions and variables (`documents`, `index`, `embed_model`, etc.)
+were lost — however, the Flask app continued to reference these same functions
+as if they still existed. This resulted in:
 
-**Root cause:** Colab session ki saari cells ek hi order mein, ek hi session
-mein run na hona — especially jab reload/persistence wali cell chalayi jati
-thi lekin baaki pipeline (retrieve/generate/rag_answer functions) dobara
-define nahi hoti thi.
+- A generic "Something went wrong" error on the frontend
+- Backend errors such as `NameError: name 'rag_answer' is not defined`
+- The model failing to generate answers despite being correctly trained,
+  simply because the required function was never available to call
 
-### ✅ v2 — Corrected Version (Ab working)
-Is version mein poori pipeline ko ek consistent order mein structure kiya gaya:
+**Root cause:** The pipeline's dependent cells were not being executed in a
+single, consistent session in the correct order — particularly when only the
+data-reload cell was run without redefining the rest of the pipeline
+(`retrieve`, `generate_text`, `rag_answer` functions).
 
-1. Dataset load/reload
-2. Embedding model load
-3. `retrieve()` function define
-4. Generator model (FLAN-T5) load
-5. `generate_text()` function define
-6. `rag_answer()` function define (jo upar ke sab functions ko combine karta hai)
-7. Flask app definition
-8. Ngrok tunnel + server start
+### ✅ v2 — Corrected Version (Currently Working)
 
-Ab har naye Colab session mein yeh saari cells top-se-bottom run karne se
-poora pipeline consistently kaam karta hai, aur frontend model se sahi
-answers le kar dikhata hai.
+In this version, the entire pipeline was restructured into a consistent,
+dependency-ordered sequence:
+
+1. Load/reload dataset
+2. Load embedding model
+3. Define `retrieve()` function
+4. Load generator model (FLAN-T5)
+5. Define `generate_text()` function
+6. Define `rag_answer()` function (combines all the above)
+7. Define Flask application
+8. Start ngrok tunnel and server
+
+Running these cells top-to-bottom in a fresh Colab session now ensures the
+entire pipeline works consistently, and the frontend correctly returns
+model-generated answers.
 
 ### 🎓 Learning Takeaway
-Colab jaise stateful-but-ephemeral environments mein kaam karte waqt yeh
-zaroori hai ke saari dependent functions/variables **ek hi session ki flow**
-mein define ho — warna kuch cells "kaam karti dikhengi" (variables load ho
-jayengi) lekin actual pipeline (jo un variables ko use karti hai) missing
-rahegi, aur error sirf tab pata chalega jab end-to-end test karenge.
+
+When working in stateful-but-ephemeral environments like Google Colab, it is
+essential that all dependent functions and variables be defined within a
+**single, continuous session flow**. Otherwise, some cells may appear to run
+successfully (e.g., loading variables) while the actual pipeline logic that
+depends on them is missing — and this kind of issue often only becomes
+apparent during full end-to-end testing.
+
